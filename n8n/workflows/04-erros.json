@@ -1,0 +1,11 @@
+{
+  "name": "PriceScan — tratamento de erros",
+  "nodes": [
+    { "parameters": {}, "id": "error", "name": "Erro de workflow", "type": "n8n-nodes-base.errorTrigger", "typeVersion": 1, "position": [260, 300] },
+    { "parameters": { "method": "POST", "url": "={{$env.PRICESCAN_API_URL}}/api/automation-runs", "sendHeaders": true, "headerParameters": { "parameters": [{ "name": "Authorization", "value": "Bearer {{$env.PRICESCAN_AUTOMATION_TOKEN}}" }] }, "sendBody": true, "jsonBody": "={{ { workflow_name: $json.workflow.name, status: 'failed', logs: [$json] } }}" }, "id": "log", "name": "Registrar falha", "type": "n8n-nodes-base.httpRequest", "typeVersion": 4.2, "position": [540, 300] }
+  ],
+  "connections": { "Erro de workflow": { "main": [[{ "node": "Registrar falha", "type": "main", "index": 0 }]] } },
+  "active": false,
+  "settings": { "executionOrder": "v1" },
+  "versionId": "pricescan-errors-v1"
+}

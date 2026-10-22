@@ -1,0 +1,37 @@
+{
+  "name": "pricescan-ia",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:e2e": "playwright test",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@supabase/ssr": "0.12.7",
+    "@supabase/supabase-js": "2.118.0",
+    "exceljs": "4.4.0",
+    "lucide-react": "1.61.0",
+    "next": "16.4.2",
+    "openai": "6.26.0",
+    "pdf-lib": "1.17.1",
+    "react": "19.2.0",
+    "react-dom": "19.2.0",
+    "sharp": "0.34.4",
+    "tesseract.js": "7.0.0",
+    "zod": "4.6.7"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.58.2",
+    "@types/node": "24.10.1",
+    "@types/react": "19.2.2",
+    "@types/react-dom": "19.2.2",
+    "typescript": "5.9.3",
+    "vitest": "5.0.5"
+  }
+}

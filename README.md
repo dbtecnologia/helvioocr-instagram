@@ -92,4 +92,3 @@ O teste E2E usa o fallback local quando as variáveis Supabase não estão defin
 - A fila BullMQ deve ser o próximo passo para processamentos grandes; o Docker Compose já disponibiliza Redis.
 - O comparador exige ofertas aprovadas e ainda deve ganhar confirmação explícita de equivalência de produtos.
 - Para LGPD e operação contínua, configure backup Supabase, retenção, logs de auditoria e rotação de segredos.
-

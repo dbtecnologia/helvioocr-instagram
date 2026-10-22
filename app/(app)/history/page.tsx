@@ -1,0 +1,2 @@
+import { History } from "lucide-react";
+export default function HistoryPage() { return <><div className="page-heading"><div><div className="eyebrow">Inteligência</div><h1>Histórico de preços</h1><p className="subhead">Acompanhe mudanças somente com uma base aprovada e datada.</p></div></div><section className="card"><div className="empty-state"><div><div className="empty-icon"><History size={21} /></div><strong>Sem histórico para exibir</strong><p>Após a aprovação de ofertas, o histórico vai mostrar evolução de preço por concorrente e produto.</p></div></div></section></>; }

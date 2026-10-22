@@ -1,0 +1,11 @@
+{
+  "name": "PriceScan — processamento OCR e IA",
+  "nodes": [
+    { "parameters": { "httpMethod": "POST", "path": "pricescan/process", "responseMode": "onReceived" }, "id": "webhook", "name": "Novo job", "type": "n8n-nodes-base.webhook", "typeVersion": 2.1, "position": [260, 300], "webhookId": "pricescan-process" },
+    { "parameters": { "method": "POST", "url": "={{$env.PRICESCAN_API_URL}}/api/process", "sendHeaders": true, "headerParameters": { "parameters": [{ "name": "Authorization", "value": "Bearer {{$env.PRICESCAN_AUTOMATION_TOKEN}}" }] }, "sendBody": true, "jsonBody": "={{$json.body}}" }, "id": "worker", "name": "Worker OCR + IA", "type": "n8n-nodes-base.httpRequest", "typeVersion": 4.2, "position": [540, 300] }
+  ],
+  "connections": { "Novo job": { "main": [[{ "node": "Worker OCR + IA", "type": "main", "index": 0 }]] } },
+  "active": false,
+  "settings": { "executionOrder": "v1" },
+  "versionId": "pricescan-process-v1"
+}

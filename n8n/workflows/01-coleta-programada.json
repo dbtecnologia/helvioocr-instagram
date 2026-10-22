@@ -1,0 +1,12 @@
+{
+  "name": "PriceScan — coleta programada",
+  "nodes": [
+    { "parameters": { "rule": { "interval": [{ "field": "hours", "hoursInterval": 24 }] } }, "id": "schedule", "name": "Agendamento", "type": "n8n-nodes-base.scheduleTrigger", "typeVersion": 1.2, "position": [260, 300] },
+    { "parameters": { "method": "GET", "url": "={{$env.PRICESCAN_API_URL}}/api/supermarkets", "options": { "response": { "response": { "responseFormat": "json" } } } }, "id": "markets", "name": "Mercados ativos", "type": "n8n-nodes-base.httpRequest", "typeVersion": 4.2, "position": [500, 300] },
+    { "parameters": { "method": "POST", "url": "={{$env.PRICESCAN_API_URL}}/api/collect/authorized", "sendHeaders": true, "headerParameters": { "parameters": [{ "name": "Authorization", "value": "Bearer {{$env.PRICESCAN_AUTOMATION_TOKEN}}" }] }, "sendBody": true, "jsonBody": "={ \"supermarket_id\": $json.id }" }, "id": "collect", "name": "Conector autorizado", "type": "n8n-nodes-base.httpRequest", "typeVersion": 4.2, "position": [760, 300] }
+  ],
+  "connections": { "Agendamento": { "main": [[{ "node": "Mercados ativos", "type": "main", "index": 0 }]] }, "Mercados ativos": { "main": [[{ "node": "Conector autorizado", "type": "main", "index": 0 }]] } },
+  "active": false,
+  "settings": { "executionOrder": "v1" },
+  "versionId": "pricescan-coleta-v1"
+}

@@ -1,0 +1,11 @@
+{
+  "name": "PriceScan — relatórios",
+  "nodes": [
+    { "parameters": { "rule": { "interval": [{ "field": "weeks", "weeksInterval": 1 }] } }, "id": "schedule", "name": "Relatório semanal", "type": "n8n-nodes-base.scheduleTrigger", "typeVersion": 1.2, "position": [260, 300] },
+    { "parameters": { "method": "GET", "url": "={{$env.PRICESCAN_API_URL}}/api/reports/excel", "sendHeaders": true, "headerParameters": { "parameters": [{ "name": "Authorization", "value": "Bearer {{$env.PRICESCAN_AUTOMATION_TOKEN}}" }] }, "options": { "response": { "response": { "responseFormat": "file" } } } }, "id": "excel", "name": "Gerar Excel", "type": "n8n-nodes-base.httpRequest", "typeVersion": 4.2, "position": [540, 300] }
+  ],
+  "connections": { "Relatório semanal": { "main": [[{ "node": "Gerar Excel", "type": "main", "index": 0 }]] } },
+  "active": false,
+  "settings": { "executionOrder": "v1" },
+  "versionId": "pricescan-report-v1"
+}
