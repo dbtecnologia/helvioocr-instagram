@@ -4,7 +4,7 @@ import { randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
 import { addUpload, listUploads } from "@/lib/store";
 import { env } from "@/lib/env";
-import { getAdminSupabase } from "@/lib/supabase-server";
+import { getDataSupabase } from "@/lib/supabase-server";
 import { hashBuffer, preprocessImage } from "@/lib/extraction";
 
 export const runtime = "nodejs";
@@ -17,7 +17,7 @@ export async function POST(request: Request) {
   if (!files.length) return NextResponse.json({ error: "Selecione pelo menos um arquivo." }, { status: 400 });
   if (files.some((file) => !allowed.has(file.type))) return NextResponse.json({ error: "Formato não permitido. Use JPG, PNG, WebP, SVG, PDF ou ZIP." }, { status: 415 });
   if (files.some((file) => file.size > 25 * 1024 * 1024)) return NextResponse.json({ error: "Cada arquivo precisa ter no máximo 25 MB." }, { status: 413 });
-  const supabase = getAdminSupabase(); const saved = [];
+  const supabase = await getDataSupabase(); const saved = [];
   for (const file of files) {
     const id = randomUUID(); const buffer = Buffer.from(await file.arrayBuffer()); const hash = hashBuffer(buffer); const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "-"); const storagePath = `${new Date().toISOString().slice(0, 10)}/${id}-${safeName}`;
     const existing = (await listUploads()).find((upload) => upload.content_hash === hash);

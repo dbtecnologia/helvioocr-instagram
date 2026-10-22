@@ -10,3 +10,7 @@ export async function getServerSupabase() {
 }
 
 export function getAdminSupabase() { if (!isServerSupabaseConfigured) return null; return createAdminClient(env.supabaseUrl, env.supabaseServiceRoleKey, { auth: { autoRefreshToken: false, persistSession: false } }); }
+
+export async function getDataSupabase() {
+  return getAdminSupabase() ?? await getServerSupabase();
+}

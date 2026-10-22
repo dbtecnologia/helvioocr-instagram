@@ -6,7 +6,7 @@ import { extractOcrCandidates, extractOcrCandidatesFromLayout, extractWithVision
 import { parseImageWithOcrSpace } from "@/lib/ocr-space";
 import { runPaddleOcr } from "@/lib/paddle-ocr";
 import { env } from "@/lib/env";
-import { getAdminSupabase } from "@/lib/supabase-server";
+import { getDataSupabase } from "@/lib/supabase-server";
 import { enqueueOcr } from "@/lib/ocr-queue";
 import type { Offer } from "@/lib/types";
 
@@ -20,7 +20,7 @@ async function processUpload(uploadId: string) {
   const updateProgress = (progress: number, progressMessage: string) => updateUpload(uploadId, { status: "processing", progress, progress_message: progressMessage });
   await updateUpload(uploadId, { status: "processing", progress: 5, progress_message: "Preparando o encarte…", started_at: new Date().toISOString(), error: null });
   try {
-    const supabase = getAdminSupabase();
+    const supabase = await getDataSupabase();
     let original: Buffer;
     await updateProgress(10, "Lendo o arquivo original…");
     if (supabase) {
