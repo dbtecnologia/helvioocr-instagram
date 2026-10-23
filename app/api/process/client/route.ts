@@ -30,7 +30,8 @@ export async function POST(request: Request) {
   try {
     const items = normalizeItems(body.items);
     const products = items.length ? extractOcrCandidatesFromLayout(items) : [];
-    const fallback = products.length ? products : extractOcrCandidates(text);
+    const textProducts = extractOcrCandidates(text);
+    const fallback = products.length >= textProducts.length ? products : textProducts;
     const readAt = new Date().toISOString();
     const offers: Offer[] = fallback.map((product, index) => ({
       id: randomUUID(),

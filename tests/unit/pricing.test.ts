@@ -9,5 +9,9 @@ describe("preços brasileiros", () => {
     const prices = findPricesInText("SALSICHA HOT DOG\n699\nPOR APENAS\n20,\n00\nNesta promoção a unidade sai por\n1000").map((item) => item.value);
     expect(prices).toEqual([6.99, 20, 10]);
   });
+  it("preserva preço inteiro explicitamente reconhecido com R", () => {
+    expect(findPricesInText("LINHA FESTA R 3\nTORRADA E COCO").map((item) => item.value)).toEqual([3]);
+    expect(extractOcrCandidates("LINHA FESTA R 3\nTORRADA E COCO")[0]?.nome).toBe("LINHA FESTA");
+  });
   it("gera candidatos de revisão sem inventar produto quando há texto na linha", () => { const candidates = extractOcrCandidates("ARROZ TIPO 1 5KG R$ 19,90\nOLEO DE SOJA 900ML R$ 6,49"); expect(candidates).toHaveLength(2); expect(candidates[0]?.nome).toContain("ARROZ"); expect(candidates[0]?.preco).toBe(19.9); expect(candidates[0]?.confianca).toBeLessThan(0.82); });
 });

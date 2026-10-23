@@ -11,9 +11,12 @@ export function hashBuffer(buffer: Buffer) { return createHash("sha256").update(
 type OcrPrice = { raw: string; value: number; index: number };
 
 function parseCompactOcrPrice(rawValue: string, context = "") {
+  const hasCurrency = /R\s*\$?/i.test(rawValue);
   const normalized = rawValue.replace(/\s/g, "").replace(/^R?\$/i, "");
   const decimal = normalized.match(/^(\d{1,3})(?:[,.])(\d{2})$/);
   if (decimal) return { value: Number(`${decimal[1]}.${decimal[2]}`), confidence: 0.72 };
+  const integer = normalized.match(/^(\d{1,3})$/);
+  if (integer && hasCurrency) return { value: Number(integer[1]), confidence: 0.34 };
   const compact = normalized.match(/^(\d{3,4})$/);
   if (!compact) return null;
   const digits = compact[1];
@@ -32,6 +35,8 @@ function parseCompactOcrPrice(rawValue: string, context = "") {
 function isPriceLikeOcrLine(line: string, nearbyText = "") {
   const cleaned = line.replace(/\s+/g, " ").trim();
   if (!cleaned) return null;
+  const explicitInteger = cleaned.match(/\bR\s*\$?\s*(\d{1,3})(?![\d,.])/i);
+  if (explicitInteger) return { raw: explicitInteger[0], value: Number(explicitInteger[1]), confidence: 0.34 };
   const parsed = parseCompactOcrPrice(cleaned, nearbyText);
   if (!parsed) return null;
   if (/\b(?:19|20)\d{2}\b/.test(cleaned)) return null;
@@ -76,7 +81,17 @@ function findOcrPrices(text: string): OcrPrice[] {
     if (splitInteger && splitCents) {
       add(`${line.trim()}${next}`, offset + line.indexOf(line.trim()), splitInteger[1], splitCents[0]);
     } else {
-      const parsed = isPriceLikeOcrLine(line, previous);
+      const explicitInteger = line.match(/\bR\s*\$?\s*(\d{1,3})(?![\d,.])/i);
+      if (explicitInteger) {
+        const rawIndex = line.indexOf(explicitInteger[0]);
+        const value = Number(explicitInteger[1]);
+        const key = `${offset + rawIndex}:${value.toFixed(2)}`;
+        if (!seen.has(key)) {
+          seen.add(key);
+          prices.push({ raw: explicitInteger[0], value, index: offset + rawIndex });
+        }
+      }
+      const parsed = explicitInteger ? null : isPriceLikeOcrLine(line, previous);
       if (parsed) {
         const rawIndex = line.indexOf(line.trim());
         const key = `${offset + rawIndex}:${parsed.value.toFixed(2)}`;
@@ -102,6 +117,8 @@ function cleanOcrName(value: string) {
     .replace(/\bPERNIL\s+SU\s*NO\b/gi, "PERNIL SUÍNO");
   return value
     .replace(/^[^A-Za-zÀ-ÿ]+/g, "")
+    .replace(/\bR\s*\$?\s*\d{1,3}(?:[.,]\d{2})?\b/gi, " ")
+    .replace(/\s+\d{1,3}(?:[.,]\d{2})?\s*$/g, "")
     .replace(/[|¦]+/g, " ")
     .replace(/\s+/g, " ")
     .replace(/[•:–—-]+$/g, "")
