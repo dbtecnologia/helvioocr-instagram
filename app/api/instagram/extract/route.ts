@@ -1,11 +1,11 @@
 import { NextResponse } from "next/server";
 import { randomUUID } from "node:crypto";
 import { createUploadFromBuffer } from "@/lib/store";
-import { getPublication } from "@/lib/store";
+import { getPublication, listPublications } from "@/lib/store";
 import { hashBuffer } from "@/lib/extraction";
 
 export const runtime = "nodejs";
-export const maxDuration = 120;
+export const maxDuration = 300;
 
 const allowedHosts = ["cdninstagram.com", "instagram.com", "fbcdn.net", "fbsbx.com", "facebook.com"];
 const maxImagesPerSelection = 3;
@@ -18,9 +18,13 @@ function isAllowedMediaUrl(value: string) {
 }
 
 export async function POST(request: Request) {
-  const body = await request.json() as { publication_id?: string; image_indexes?: number[] };
+  const body = await request.json() as { publication_id?: string; image_indexes?: number[]; source_url?: string | null; external_id?: string | null; supermarket_id?: string | null };
   if (!body.publication_id) return NextResponse.json({ error: "publication_id é obrigatório." }, { status: 400 });
-  const publication = await getPublication(body.publication_id);
+  let publication = await getPublication(body.publication_id);
+  if (!publication && (body.source_url || body.external_id)) {
+    const candidates = await listPublications(body.supermarket_id ?? undefined);
+    publication = candidates.find((candidate) => (body.source_url && candidate.source_url === body.source_url) || (body.external_id && candidate.external_id === body.external_id)) ?? null;
+  }
   if (!publication) return NextResponse.json({ error: "Publicação não encontrada." }, { status: 404 });
   const requestedIndexes = body.image_indexes?.length ? body.image_indexes : publication.media_urls.map((_, index) => index);
   if (requestedIndexes.length > maxImagesPerSelection) return NextResponse.json({ error: `Selecione no máximo ${maxImagesPerSelection} fotos por análise.` }, { status: 400 });
@@ -59,7 +63,13 @@ export async function POST(request: Request) {
     }
   }))).filter((id) => id !== null);
   if (!uploads.length) return NextResponse.json({ error: "Não foi possível baixar as imagens desta publicação." }, { status: 502 });
-  await Promise.all(uploads.map((uploadId) => fetch(new URL("/api/process", request.url), { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ upload_id: uploadId }) })));
-  return NextResponse.json({ status: "queued", publication_id: publication.id, uploads }, { status: 202 });
+  const processResponses = await Promise.all(uploads.map((uploadId) => fetch(new URL("/api/process", request.url), { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ upload_id: uploadId }) })));
+  const processResults = await Promise.all(processResponses.map(async (response) => {
+    const result = await response.json().catch(() => ({})) as { error?: string; status?: string; offers?: number };
+    return { response, result };
+  }));
+  const failed = processResults.find(({ response }) => !response.ok);
+  if (failed) return NextResponse.json({ error: failed.result.error ?? "A leitura do encarte falhou.", publication_id: publication.id, uploads }, { status: 502 });
+  return NextResponse.json({ status: "completed", publication_id: publication.id, uploads, results: processResults.map(({ result }) => result) }, { status: 200 });
 }
 

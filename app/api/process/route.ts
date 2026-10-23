@@ -128,6 +128,11 @@ export async function POST(request: Request) {
   }
 
   await updateUpload(body.upload_id, { status: "queued", error: null });
-  enqueueOcr(() => processUpload(body.upload_id!)).catch(() => undefined);
-  return NextResponse.json({ status: "queued", upload_id: body.upload_id }, { status: 202 });
+  try {
+    const result = await enqueueOcr(() => processUpload(body.upload_id!));
+    return NextResponse.json({ status: result.status, upload_id: body.upload_id, offers: result.offers.length, detected_prices: result.detected_prices.length }, { status: 200 });
+  } catch (error) {
+    return NextResponse.json({ status: "failed", upload_id: body.upload_id, error: error instanceof Error ? error.message : "Falha ao processar o encarte." }, { status: 500 });
+  }
 }
+
