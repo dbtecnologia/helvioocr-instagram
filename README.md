@@ -8,7 +8,7 @@ Sistema privado de inteligência de preços para transformar encartes em ofertas
 - Dashboard com estados vazios reais, indicadores e saúde do pipeline.
 - CRUD de supermercados monitorados, com persistência local no desenvolvimento e caminho de persistência via Supabase no servidor.
 - Upload em lote de JPG, PNG, WebP, PDF e ZIP com validação de tipo/tamanho, hash e pré-processamento Sharp.
-- OCR gratuito com PaddleOCR em serviço FastAPI, retornando texto, polígonos, confiança e produtos associados aos preços; Tesseract local continua disponível como fallback sem custo.
+- OCR gratuito com Tesseract.js no navegador, retornando texto, caixas de coordenadas, confiança e produtos associados aos preços; o endpoint de servidor continua disponível como fallback sem custo.
 - Schema Zod para impedir que respostas fora do formato sejam salvas como ofertas válidas.
 - Tela de revisão humana, comparador, histórico, relatórios e configurações com estados honestos quando ainda não há dados.
 - Exportação real de ExcelJS (`/api/reports/excel`) e PDF (`/api/reports/pdf`) usando apenas ofertas aprovadas.
@@ -19,7 +19,7 @@ Sistema privado de inteligência de preços para transformar encartes em ofertas
 
 ## Rodar localmente
 
-Requisitos: Node.js 22+ (Node 26 também é suportado), npm e, para o fluxo completo, uma conta Supabase. Para OCR principal, Docker ou Python 3.11+ com PaddleOCR.
+Requisitos: Node.js 22+ (Node 26 também é suportado), npm e, para o fluxo completo, uma conta Supabase. O OCR principal roda no navegador e não exige chave de API, Docker ou Python.
 
 ```bash
 npm install
@@ -39,9 +39,11 @@ Sem variáveis Supabase, o projeto usa um fallback local em `data/store.json` e 
 
 O `service_role` é usado somente em rotas de servidor. Nunca publique essa variável com o prefixo `NEXT_PUBLIC_`.
 
-## OCR gratuito com PaddleOCR
+## OCR gratuito com Tesseract.js
 
-O botão da tela **Coleta de encartes** envia o arquivo, inicia `POST /api/process` e leva as ofertas candidatas para **Revisão de ofertas**. O processamento usa PaddleOCR, associa preços aos textos por coordenadas, preserva a confiança e marca leituras ambíguas como `needs_review`. Nenhum produto ou preço é criado quando não há texto confiável.
+O botão da tela **Coleta de encartes** lê JPG, PNG e WEBP no próprio navegador com Tesseract.js em português. O navegador envia ao backend apenas o texto e as coordenadas; o backend associa os preços aos produtos, preserva a confiança, grava no Supabase e marca leituras ambíguas como `needs_review`. Nenhum produto ou preço é criado quando não há texto reconhecível.
+
+O mesmo fluxo é usado para as imagens selecionadas do Instagram. Após a leitura, os produtos aparecem automaticamente em **Relatórios** e **Revisão**, onde podem ser editados, aprovados e exportados para Excel ou PDF.
 
 ### Serviço FastAPI
 
@@ -51,7 +53,7 @@ O serviço está em `ocr-service/` e expõe `GET /health` e `POST /ocr`. Para in
 docker compose up --build paddle-ocr
 ```
 
-No `.env.local` do Next.js, use `PADDLEOCR_URL=http://127.0.0.1:8001`. Em produção, aponte essa variável para a URL HTTPS de um serviço compatível com Docker e, opcionalmente, use `PADDLEOCR_TOKEN`/`PADDLEOCR_API_TOKEN`. O adaptador HTTP mantém a chave fora do navegador.
+O fallback de servidor permanece disponível para automações ou ambientes sem navegador. No `.env.local`, ele pode ser ativado com `PADDLEOCR_ENABLED=true` ou `PADDLEOCR_URL=http://127.0.0.1:8001`; não é necessário para o fluxo normal da tela de Coleta.
 
 O endpoint aceita JPG, PNG e WEBP até 25 MB. O modelo é baixado pelo PaddleOCR na primeira execução e fica no volume Docker `paddle_models`.
 
