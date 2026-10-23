@@ -83,6 +83,17 @@ export async function listUploads(): Promise<UploadRecord[]> {
 
 export async function getUpload(id: string): Promise<UploadRecord | null> { const supabase = await getDataSupabase(); if (supabase) { const { data, error } = await supabase.from("flyer_images").select("*").eq("id", id).maybeSingle(); if (error) throw new Error(error.message); if (!data) return null; return { id: data.id, original_name: data.metadata?.original_name ?? data.storage_path, mime_type: data.metadata?.mime_type ?? "image/*", size: data.metadata?.size ?? 0, content_hash: data.image_hash, storage_path: data.storage_path, processed_path: data.metadata?.processed_path ?? null, supermarket_id: data.metadata?.supermarket_id ?? null, publication_id: data.publication_id ?? data.metadata?.publication_id ?? null, source_url: data.metadata?.source_url ?? null, status: data.processing_status, progress: data.metadata?.progress ?? 0, progress_message: data.metadata?.progress_message ?? null, created_at: data.created_at, completed_at: data.metadata?.completed_at ?? null, started_at: data.metadata?.started_at ?? null, raw_ocr_text: data.metadata?.raw_ocr_text ?? null, offers: data.metadata?.offers ?? 0, error: data.metadata?.error ?? null } as UploadRecord; } return ((await readLocal()).uploads.find((upload) => upload.id === id) ?? null) as UploadRecord | null; }
 
+export async function getUploadIdByHash(contentHash: string): Promise<string | null> {
+  const supabase = await getDataSupabase();
+  if (supabase) {
+    const { data, error } = await supabase.from("flyer_images").select("id").eq("image_hash", contentHash).maybeSingle();
+    if (error) throw new Error(error.message);
+    return typeof data?.id === "string" ? data.id : null;
+  }
+  const upload = (await readLocal()).uploads.find((candidate) => candidate.content_hash === contentHash);
+  return upload && typeof upload.id === "string" ? upload.id : null;
+}
+
 export async function updateUpload(id: string, input: Record<string, unknown>) {
   const supabase = await getDataSupabase();
   if (supabase) { const current = await getUpload(id); if (!current) throw new Error("Upload não encontrado."); const metadata = { original_name: current.original_name, mime_type: current.mime_type, size: current.size, processed_path: current.processed_path, supermarket_id: current.supermarket_id, publication_id: current.publication_id, source_url: current.source_url, raw_ocr_text: current.raw_ocr_text, offers: current.offers, progress: current.progress, progress_message: current.progress_message, completed_at: current.completed_at, started_at: current.started_at, error: current.error, ...input }; const { data, error } = await supabase.from("flyer_images").update({ processing_status: String(input.status ?? current.status), metadata, publication_id: current.publication_id ?? input.publication_id ?? null }).eq("id", id).select("*").single(); if (error) throw new Error(error.message); return data; }

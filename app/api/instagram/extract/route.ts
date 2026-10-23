@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
 import { randomUUID } from "node:crypto";
-import { createUploadFromBuffer } from "@/lib/store";
-import { getPublication, listPublications } from "@/lib/store";
+import { createUploadFromBuffer, getUploadIdByHash, listPublications, getPublication } from "@/lib/store";
 import { hashBuffer } from "@/lib/extraction";
+import { enqueueOcr } from "@/lib/ocr-queue";
+import { processUpload } from "@/app/api/process/route";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
@@ -53,6 +54,8 @@ export async function POST(request: Request) {
     if (seenHashes.has(contentHash)) return null;
     seenHashes.add(contentHash);
     try {
+      const existingId = await getUploadIdByHash(contentHash);
+      if (existingId) return existingId;
       const id = randomUUID();
       const extension = contentType === "image/png" ? "png" : contentType === "image/webp" ? "webp" : "jpg";
       await createUploadFromBuffer({ id, original_name: `instagram-${publication.id}-${index}.${extension}`, mime_type: contentType, size: buffer.length, content_hash: contentHash, storage_path: `instagram/${id}.${extension}`, supermarket_id: publication.supermarket_id, publication_id: publication.id, source_url: publication.source_url, buffer });
@@ -63,13 +66,11 @@ export async function POST(request: Request) {
     }
   }))).filter((id) => id !== null);
   if (!uploads.length) return NextResponse.json({ error: "Não foi possível baixar as imagens desta publicação." }, { status: 502 });
-  const processResponses = await Promise.all(uploads.map((uploadId) => fetch(new URL("/api/process", request.url), { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ upload_id: uploadId }) })));
-  const processResults = await Promise.all(processResponses.map(async (response) => {
-    const result = await response.json().catch(() => ({})) as { error?: string; status?: string; offers?: number };
-    return { response, result };
-  }));
-  const failed = processResults.find(({ response }) => !response.ok);
-  if (failed) return NextResponse.json({ error: failed.result.error ?? "A leitura do encarte falhou.", publication_id: publication.id, uploads }, { status: 502 });
-  return NextResponse.json({ status: "completed", publication_id: publication.id, uploads, results: processResults.map(({ result }) => result) }, { status: 200 });
+  try {
+    const results = await Promise.all(uploads.map((uploadId) => enqueueOcr(() => processUpload(uploadId))));
+    return NextResponse.json({ status: "completed", publication_id: publication.id, uploads, results: results.map((result) => ({ status: result.status, offers: result.offers.length, detected_prices: result.detected_prices.length })) }, { status: 200 });
+  } catch (error) {
+    return NextResponse.json({ error: error instanceof Error ? error.message : "A leitura do encarte falhou.", publication_id: publication.id, uploads }, { status: 502 });
+  }
 }
 

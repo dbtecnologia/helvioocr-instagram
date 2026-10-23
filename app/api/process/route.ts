@@ -13,7 +13,7 @@ import type { Offer } from "@/lib/types";
 export const runtime = "nodejs";
 export const maxDuration = 300;
 
-async function processUpload(uploadId: string) {
+export async function processUpload(uploadId: string) {
   const upload = await getUpload(uploadId);
   if (!upload) throw new Error("Upload não encontrado.");
 
