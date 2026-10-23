@@ -25,7 +25,7 @@ export async function listSupermarkets(): Promise<Supermarket[]> {
     if (error) throw new Error(error.message);
     return (data ?? []) as Supermarket[];
   }
-  return (await readLocal()).supermarkets;
+  return (await readLocal()).supermarkets.map((item) => ({ ...item, market_type: item.market_type ?? "competitor", monitoring_enabled: item.monitoring_enabled ?? false }));
 }
 
 export async function createSupermarket(input: Omit<Supermarket, "id" | "created_at" | "updated_at">) {
@@ -48,7 +48,7 @@ export async function updateSupermarket(id: string, input: Partial<Supermarket>)
   }
   const store = await readLocal(); const index = store.supermarkets.findIndex((item) => item.id === id);
   if (index < 0) throw new Error("Supermercado não encontrado.");
-  store.supermarkets[index] = { ...store.supermarkets[index], ...input, updated_at: new Date().toISOString() }; await writeLocal(store); return store.supermarkets[index];
+  store.supermarkets[index] = { ...store.supermarkets[index], ...input, market_type: store.supermarkets[index].market_type ?? "competitor", monitoring_enabled: store.supermarkets[index].monitoring_enabled ?? false, updated_at: new Date().toISOString() }; await writeLocal(store); return store.supermarkets[index];
 }
 
 export async function deleteSupermarket(id: string) {

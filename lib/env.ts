@@ -15,6 +15,7 @@ export const env = {
   apifyActor: process.env.APIFY_ACTOR ?? "apify~instagram-scraper",
   apifyTimeoutMs: Number(process.env.APIFY_TIMEOUT_MS ?? 120),
   apifyMaxResults: Number(process.env.APIFY_MAX_RESULTS ?? 30),
+  cronSecret: process.env.CRON_SECRET ?? "",
   allowLocalFallback: process.env.ALLOW_LOCAL_FALLBACK !== "false",
 };
 

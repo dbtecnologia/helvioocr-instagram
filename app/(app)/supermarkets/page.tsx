@@ -5,7 +5,7 @@ import { Camera, Edit3, ExternalLink, FileSpreadsheet, FileText, Images, LoaderC
 import type { Publication, Supermarket } from "@/lib/types";
 import { runBrowserOcr } from "@/lib/browser-ocr";
 
-const emptyForm = { name: "", instagram_handle: "", instagram_url: "", city: "", neighborhood: "", address: "", network: "", active: true, monitoring_frequency: "weekly", notes: "" };
+const emptyForm = { name: "", instagram_handle: "", instagram_url: "", city: "", neighborhood: "", address: "", network: "", active: true, market_type: "competitor", monitoring_enabled: false, monitoring_frequency: "weekly", notes: "" };
 const maxOcrImages = 3;
 
 function handleFromInstagramUrl(value: string) {
@@ -66,7 +66,7 @@ export default function SupermarketsPage() {
   }
 
   function openEdit(item: Supermarket) {
-    setEditingId(item.id); setForm({ ...emptyForm, ...item, monitoring_frequency: item.monitoring_frequency ?? "weekly" }); setMessage(""); setDrawer(true);
+    setEditingId(item.id); setForm({ ...emptyForm, ...item, market_type: item.market_type ?? "competitor", monitoring_enabled: item.monitoring_enabled ?? false, monitoring_frequency: item.monitoring_frequency ?? "weekly" }); setMessage(""); setDrawer(true);
   }
 
   async function openFeed(item: Supermarket, collect = true) {
@@ -221,10 +221,32 @@ export default function SupermarketsPage() {
     } finally { setSharingImages(false); }
   }
 
+  async function setMarketType(item: Supermarket, marketType: "own" | "competitor") {
+    if (item.market_type === marketType) return;
+    try {
+      const response = await fetch(`/api/supermarkets/${item.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ market_type: marketType }) });
+      const result = await response.json();
+      if (!response.ok) { setMessage(result.error ?? "Não foi possível alterar o tipo do mercado."); return; }
+      setItems((current) => current.map((currentItem) => currentItem.id === item.id ? result as Supermarket : currentItem));
+      setMessage(`${item.name} marcado como ${marketType === "own" ? "meu supermercado" : "concorrente"}.`);
+    } catch { setMessage("Não foi possível alterar o tipo do mercado."); }
+  }
+
+  async function setMonitoring(item: Supermarket, enabled: boolean) {
+    try {
+      const response = await fetch(`/api/supermarkets/${item.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ monitoring_enabled: enabled, monitoring_frequency: "minute" }) });
+      const result = await response.json();
+      if (!response.ok) { setMessage(result.error ?? "Não foi possível alterar o monitoramento."); return; }
+      setItems((current) => current.map((currentItem) => currentItem.id === item.id ? result as Supermarket : currentItem));
+      setMessage(enabled ? `${item.name} preparado para monitoramento a cada minuto.` : `Monitoramento pausado para ${item.name}.`);
+    } catch { setMessage("Não foi possível alterar o monitoramento."); }
+  }
+
   const filtered = items.filter((item) => `${item.name} ${item.instagram_handle} ${item.city}`.toLowerCase().includes(query.toLowerCase()));
   const feedMarket = items.find((item) => item.id === feedMarketId);
 
   return <>
+    {items.length > 0 && <section className="card" style={{ marginBottom: 18 }}><div className="card-header"><div><h2>Defina o papel de cada mercado</h2><p>Marque um como <strong>Meu supermercado</strong>; os demais ficam como concorrentes para comparação.</p></div></div><div className="card-body" style={{ display: "grid", gap: 10 }}>{items.map((item) => <div key={item.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap", borderBottom: "1px solid #e6edf3", paddingBottom: 10 }}><div><strong>{item.name}</strong><div className="field-note">{item.instagram_handle} · {item.monitoring_enabled ? "monitoramento preparado" : "monitoramento pausado"}</div></div><div style={{ display: "flex", gap: 7, flexWrap: "wrap" }}><button type="button" className={`button ${item.market_type === "own" ? "button-primary" : "button-ghost"}`} onClick={() => void setMarketType(item, "own")} disabled={item.market_type === "own"}>Meu supermercado</button><button type="button" className={`button ${item.market_type === "competitor" ? "button-soft" : "button-ghost"}`} onClick={() => void setMarketType(item, "competitor")} disabled={item.market_type === "competitor"}>Concorrente</button><button type="button" className="button button-ghost" onClick={() => void setMonitoring(item, !item.monitoring_enabled)}>{item.monitoring_enabled ? "Pausar monitoramento" : "Ativar a cada minuto"}</button></div></div>)}</div></section>}
     {extracting && <div className="notice" style={{ marginBottom: 16 }}><div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}><strong>{ocrProgressMessage || "Lendo encarte…"}</strong><strong>{ocrProgress}%</strong></div><div className="progress-track" role="progressbar" aria-valuenow={ocrProgress} aria-valuemin={0} aria-valuemax={100} style={{ marginTop: 8 }}><span className="progress-fill" style={{ width: `${ocrProgress}%` }} /></div></div>}
     <div className="page-heading"><div><div className="eyebrow">Operação</div><h1>Supermercados monitorados</h1><p className="subhead">Cadastre apenas o nome e o Instagram. Os demais dados podem ser preenchidos depois.</p></div><button className="button button-primary" onClick={openCreate}><Plus size={15} />Adicionar supermercado</button></div>
     {message && <div className="notice" style={{ marginBottom: 18 }}>{message}</div>}

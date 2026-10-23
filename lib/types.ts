@@ -10,7 +10,9 @@ export type Supermarket = {
   address?: string;
   network?: string;
   active: boolean;
-  monitoring_frequency?: string;
+  market_type: "own" | "competitor";
+  monitoring_enabled?: boolean;
+  monitoring_frequency?: "minute" | "daily" | "weekly" | "manual" | string;
   notes?: string;
   created_at: string;
   updated_at: string;

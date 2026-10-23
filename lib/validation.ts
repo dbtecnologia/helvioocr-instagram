@@ -9,9 +9,13 @@ export const supermarketSchema = z.object({
   address: z.string().trim().optional().default(""),
   network: z.string().trim().optional().default(""),
   active: z.boolean().default(true),
-  monitoring_frequency: z.string().optional().default("weekly"),
+  market_type: z.enum(["own", "competitor"]).default("competitor"),
+  monitoring_enabled: z.boolean().default(false),
+  monitoring_frequency: z.enum(["minute", "daily", "weekly", "manual"]).default("weekly"),
   notes: z.string().trim().optional().default(""),
 });
+
+export const supermarketUpdateSchema = supermarketSchema.partial();
 
 export const extractionOfferSchema = z.object({
   nome: z.string().min(1),
