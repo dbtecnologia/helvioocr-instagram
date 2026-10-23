@@ -13,6 +13,7 @@ create table if not exists public.supermarkets (
   monitoring_frequency text not null default 'weekly' check (monitoring_frequency in ('daily','weekly','manual')),
   notes text,
   last_collection_at timestamptz,
+  flyer_count integer not null default 0 check (flyer_count >= 0),
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
@@ -151,3 +152,4 @@ insert into storage.buckets (id, name, public) values ('flyer-images', 'flyer-im
 create policy "authenticated users read flyer images" on storage.objects for select to authenticated using (bucket_id = 'flyer-images');
 create policy "authenticated users upload flyer images" on storage.objects for insert to authenticated with check (bucket_id = 'flyer-images');
 create policy "authenticated users update flyer images" on storage.objects for update to authenticated using (bucket_id = 'flyer-images') with check (bucket_id = 'flyer-images');
+
