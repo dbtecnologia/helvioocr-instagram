@@ -13,5 +13,10 @@ describe("preços brasileiros", () => {
     expect(findPricesInText("LINHA FESTA R 3\nTORRADA E COCO").map((item) => item.value)).toEqual([3]);
     expect(extractOcrCandidates("LINHA FESTA R 3\nTORRADA E COCO")[0]?.nome).toBe("LINHA FESTA");
   });
+  it("mantém preço parcialmente lido para conferência", () => {
+    const result = extractOcrCandidates("CAFÉ CABOCLO\nA CADA 100G\n3,");
+    expect(result[0]).toMatchObject({ nome: "CAFÉ CABOCLO", preco: 3 });
+    expect(result[0]?.confianca).toBe(0.25);
+  });
   it("gera candidatos de revisão sem inventar produto quando há texto na linha", () => { const candidates = extractOcrCandidates("ARROZ TIPO 1 5KG R$ 19,90\nOLEO DE SOJA 900ML R$ 6,49"); expect(candidates).toHaveLength(2); expect(candidates[0]?.nome).toContain("ARROZ"); expect(candidates[0]?.preco).toBe(19.9); expect(candidates[0]?.confianca).toBeLessThan(0.82); });
 });

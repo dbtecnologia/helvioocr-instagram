@@ -8,7 +8,7 @@ export type ExtractedProduct = import("zod").infer<typeof extractionOfferSchema>
 
 export function hashBuffer(buffer: Buffer) { return createHash("sha256").update(buffer).digest("hex"); }
 
-type OcrPrice = { raw: string; value: number; index: number };
+type OcrPrice = { raw: string; value: number; index: number; confidence?: number };
 
 function parseCompactOcrPrice(rawValue: string, context = "") {
   const hasCurrency = /R\s*\$?/i.test(rawValue);
@@ -17,6 +17,8 @@ function parseCompactOcrPrice(rawValue: string, context = "") {
   if (decimal) return { value: Number(`${decimal[1]}.${decimal[2]}`), confidence: 0.72 };
   const integer = normalized.match(/^(\d{1,3})$/);
   if (integer && hasCurrency) return { value: Number(integer[1]), confidence: 0.34 };
+  const partial = normalized.match(/^(\d{1,3})[,.]$/);
+  if (partial && /(?:R\s*\$?|cada|un\.?|preço|oferta)/i.test(context)) return { value: Number(partial[1]), confidence: 0.25 };
   const compact = normalized.match(/^(\d{3,4})$/);
   if (!compact) return null;
   const digits = compact[1];
@@ -88,7 +90,7 @@ function findOcrPrices(text: string): OcrPrice[] {
         const key = `${offset + rawIndex}:${value.toFixed(2)}`;
         if (!seen.has(key)) {
           seen.add(key);
-          prices.push({ raw: explicitInteger[0], value, index: offset + rawIndex });
+          prices.push({ raw: explicitInteger[0], value, index: offset + rawIndex, confidence: 0.34 });
         }
       }
       const parsed = explicitInteger ? null : isPriceLikeOcrLine(line, previous);
@@ -97,7 +99,7 @@ function findOcrPrices(text: string): OcrPrice[] {
         const key = `${offset + rawIndex}:${parsed.value.toFixed(2)}`;
         if (!seen.has(key)) {
           seen.add(key);
-          prices.push({ raw: parsed.raw, value: parsed.value, index: offset + rawIndex });
+          prices.push({ raw: parsed.raw, value: parsed.value, index: offset + rawIndex, confidence: parsed.confidence });
         }
       }
     }
@@ -166,7 +168,7 @@ export function extractOcrCandidates(text: string): ExtractedProduct[] {
     }
     if (!isUsefulProductName(name)) continue;
     const presentation = name.match(/(\d+(?:[.,]\d+)?)\s*(kg|g|l|ml|un|und|cx|pct|pacote|fardo)\b/i);
-    candidates.push({ nome: name, marca: null, quantidade: presentation ? Number(presentation[1].replace(",", ".")) : null, unidade: presentation?.[2]?.toLowerCase() ?? null, preco: match.value, preco_anterior: null, condicoes: null, confianca: match.raw.includes(",") || /\s\d{2}$/.test(match.raw) ? 0.62 : 0.55 });
+    candidates.push({ nome: name, marca: null, quantidade: presentation ? Number(presentation[1].replace(",", ".")) : null, unidade: presentation?.[2]?.toLowerCase() ?? null, preco: match.value, preco_anterior: null, condicoes: null, confianca: match.confidence ?? (match.raw.includes(",") || /\s\d{2}$/.test(match.raw) ? 0.62 : 0.55) });
   }
   return dedupeProducts(candidates);
 }
