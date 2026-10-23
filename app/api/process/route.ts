@@ -85,7 +85,7 @@ export async function processUpload(uploadId: string) {
       source_url: upload.source_url ?? null,
       published_at: extraction.date,
       category: null,
-      promotion_conditions: product.condicoes ?? null,
+      promotion_conditions: product.condicoes ?? ([product.marca, product.quantidade && product.unidade ? `${product.quantidade} ${product.unidade}` : null].filter(Boolean).join(" · ") || null),
       raw_ocr_text: ocrText,
       extracted_at: readAt,
     }));

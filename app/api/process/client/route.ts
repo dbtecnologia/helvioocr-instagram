@@ -49,7 +49,7 @@ export async function POST(request: Request) {
       source_url: upload.source_url ?? null,
       published_at: null,
       category: null,
-      promotion_conditions: product.condicoes ?? null,
+      promotion_conditions: product.condicoes ?? ([product.marca, product.quantidade && product.unidade ? `${product.quantidade} ${product.unidade}` : null].filter(Boolean).join(" · ") || null),
       raw_ocr_text: text,
       extracted_at: readAt,
     }));

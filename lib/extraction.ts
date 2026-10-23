@@ -26,6 +26,10 @@ function findOcrPrices(text: string): OcrPrice[] {
   for (const match of text.matchAll(/(?:R\$\s*)?(\d{1,3}(?:\.\d{3})*),(\d{2})/g)) {
     add(match[0], match.index ?? 0, match[1], match[2]);
   }
+  // Some OCR engines preserve the dot used by Brazilian flyers: R$ 39.99 or 39.99.
+  for (const match of text.matchAll(/(?:R\$\s*)?(\d{1,3})\.(\d{2})(?!\d)/g)) {
+    add(match[0], match.index ?? 0, match[1], match[2]);
+  }
   // Tesseract sometimes separates the cents with a space: R$ 39 99.
   for (const match of text.matchAll(/R\$\s*(\d{1,3})\s+(\d{2})(?!\d)/gi)) {
     add(match[0], match.index ?? 0, match[1], match[2]);
