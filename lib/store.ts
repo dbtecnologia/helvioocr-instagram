@@ -209,7 +209,10 @@ export async function upsertPublications(items: Publication[]) {
   if (!items.length) return [];
   const supabase = await getDataSupabase();
   if (supabase) {
-    const rows = items.map((item) => ({ ...item, media_urls: item.media_urls }));
+    // Do not send the generated id on conflict: Apify creates a new UUID on
+    // every collection, but existing flyer_images still reference the old id.
+    // Keeping the database id prevents a refresh from violating the FK.
+    const rows = items.map(({ id: _id, ...item }) => ({ ...item, media_urls: item.media_urls }));
     const { data, error } = await supabase.from("publications").upsert(rows, { onConflict: "supermarket_id,content_hash" }).select();
     if (error) throw new Error(error.message);
     return (data ?? []) as Publication[];
