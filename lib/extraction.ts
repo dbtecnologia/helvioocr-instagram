@@ -149,6 +149,7 @@ async function getOcrWorker() {
   if (!ocrWorkerPromise) {
     ocrWorkerPromise = import("tesseract.js").then(async ({ createWorker }) => {
       const worker = await createWorker(env.ocrLanguage, undefined, {
+        workerPath: require.resolve("tesseract.js/src/worker-script/node/index.js"),
       });
       await worker.setParameters({ tessedit_pageseg_mode: "6" as Tesseract.PSM, preserve_interword_spaces: "1" });
       return worker;
