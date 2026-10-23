@@ -144,6 +144,20 @@ export async function preprocessImage(input: Buffer) {
 }
 
 let ocrWorkerPromise: Promise<Tesseract.Worker> | null = null;
+let ocrQueue: Promise<void> = Promise.resolve();
+
+async function withOcrLock<T>(task: () => Promise<T>) {
+  let release!: () => void;
+  const turn = new Promise<void>((resolve) => { release = resolve; });
+  const previous = ocrQueue;
+  ocrQueue = previous.then(() => turn);
+  await previous;
+  try {
+    return await task();
+  } finally {
+    release();
+  }
+}
 
 async function getOcrWorker() {
   if (!ocrWorkerPromise) {
@@ -162,31 +176,35 @@ async function getOcrWorker() {
 }
 
 export async function runOcr(input: Buffer) {
-  const worker = await getOcrWorker();
-  await worker.setParameters({ tessedit_pageseg_mode: "6" as Tesseract.PSM, preserve_interword_spaces: "1" });
-  const result = await worker.recognize(input);
-  return result.data.text;
+  return withOcrLock(async () => {
+    const worker = await getOcrWorker();
+    await worker.setParameters({ tessedit_pageseg_mode: "6" as Tesseract.PSM, preserve_interword_spaces: "1" });
+    const result = await worker.recognize(input);
+    return result.data.text;
+  });
 }
 
 export async function runOcrVariants(input: Buffer) {
-  const metadata = await sharp(input).metadata();
-  const width = metadata.width ?? 1800;
-  const height = metadata.height ?? 1800;
-  const targetWidth = Math.min(Math.max(1400, width), 2200);
-  const base = sharp(input).rotate().resize({ width: targetWidth, withoutEnlargement: false, fit: "inside" });
-  const variants = [
-    { image: await base.clone().sharpen().png().toBuffer(), psm: "11" as Tesseract.PSM },
-    { image: await base.clone().grayscale().normalize().sharpen().png().toBuffer(), psm: "11" as Tesseract.PSM },
-    { image: await sharp(input).rotate().extract({ left: 0, top: Math.floor(height * 0.25), width, height: Math.max(1, Math.floor(height * 0.7)) }).resize({ width: targetWidth, withoutEnlargement: false, fit: "inside" }).png().toBuffer(), psm: "6" as Tesseract.PSM },
-  ];
-  const worker = await getOcrWorker();
-  const texts: string[] = [];
-  for (const variant of variants) {
-    await worker.setParameters({ tessedit_pageseg_mode: variant.psm, preserve_interword_spaces: "1" });
-    const result = await worker.recognize(variant.image);
-    texts.push(result.data.text);
-  }
-  return texts;
+  return withOcrLock(async () => {
+    const metadata = await sharp(input).metadata();
+    const width = metadata.width ?? 1800;
+    const height = metadata.height ?? 1800;
+    const targetWidth = Math.min(Math.max(1400, width), 2200);
+    const base = sharp(input).rotate().resize({ width: targetWidth, withoutEnlargement: false, fit: "inside" });
+    const variants = [
+      { image: await base.clone().sharpen().png().toBuffer(), psm: "11" as Tesseract.PSM },
+      { image: await base.clone().grayscale().normalize().sharpen().png().toBuffer(), psm: "11" as Tesseract.PSM },
+      { image: await sharp(input).rotate().extract({ left: 0, top: Math.floor(height * 0.25), width, height: Math.max(1, Math.floor(height * 0.7)) }).resize({ width: targetWidth, withoutEnlargement: false, fit: "inside" }).png().toBuffer(), psm: "6" as Tesseract.PSM },
+    ];
+    const worker = await getOcrWorker();
+    const texts: string[] = [];
+    for (const variant of variants) {
+      await worker.setParameters({ tessedit_pageseg_mode: variant.psm, preserve_interword_spaces: "1" });
+      const result = await worker.recognize(variant.image);
+      texts.push(result.data.text);
+    }
+    return texts;
+  });
 }
 
 export async function extractWithVision(image: Buffer, ocrText: string) {
