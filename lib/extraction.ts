@@ -172,13 +172,11 @@ export async function runOcrVariants(input: Buffer) {
   const metadata = await sharp(input).metadata();
   const width = metadata.width ?? 1800;
   const height = metadata.height ?? 1800;
-  const targetWidth = Math.max(1800, width);
+  const targetWidth = Math.min(Math.max(1400, width), 2200);
   const base = sharp(input).rotate().resize({ width: targetWidth, withoutEnlargement: false, fit: "inside" });
   const variants = [
     { image: await base.clone().sharpen().png().toBuffer(), psm: "11" as Tesseract.PSM },
     { image: await base.clone().grayscale().normalize().sharpen().png().toBuffer(), psm: "11" as Tesseract.PSM },
-    { image: await base.clone().grayscale().normalize().threshold(170).png().toBuffer(), psm: "11" as Tesseract.PSM },
-    { image: await base.clone().grayscale().normalize().threshold(210).png().toBuffer(), psm: "11" as Tesseract.PSM },
     { image: await sharp(input).rotate().extract({ left: 0, top: Math.floor(height * 0.25), width, height: Math.max(1, Math.floor(height * 0.7)) }).resize({ width: targetWidth, withoutEnlargement: false, fit: "inside" }).png().toBuffer(), psm: "6" as Tesseract.PSM },
   ];
   const worker = await getOcrWorker();
@@ -206,3 +204,4 @@ export async function extractWithVision(image: Buffer, ocrText: string) {
   if (!parsed.success) return { status: "needs_review" as const, reason: "Resposta da IA fora do schema.", products: [] };
   return { status: "completed" as const, products: parsed.data.produtos, date: parsed.data.data_publicacao ?? null };
 }
+

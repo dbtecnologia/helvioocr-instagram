@@ -2,7 +2,6 @@ import { NextResponse } from "next/server";
 import { randomUUID } from "node:crypto";
 import { createUploadFromBuffer, getUploadIdByHash, listPublications, getPublication } from "@/lib/store";
 import { hashBuffer } from "@/lib/extraction";
-import { enqueueOcr } from "@/lib/ocr-queue";
 import { processUpload } from "@/app/api/process/route";
 
 export const runtime = "nodejs";
@@ -67,7 +66,7 @@ export async function POST(request: Request) {
   }))).filter((id) => id !== null);
   if (!uploads.length) return NextResponse.json({ error: "Não foi possível baixar as imagens desta publicação." }, { status: 502 });
   try {
-    const results = await Promise.all(uploads.map((uploadId) => enqueueOcr(() => processUpload(uploadId))));
+    const results = await Promise.all(uploads.map((uploadId) => processUpload(uploadId)));
     return NextResponse.json({ status: "completed", publication_id: publication.id, uploads, results: results.map((result) => ({ status: result.status, offers: result.offers.length, detected_prices: result.detected_prices.length })) }, { status: 200 });
   } catch (error) {
     return NextResponse.json({ error: error instanceof Error ? error.message : "A leitura do encarte falhou.", publication_id: publication.id, uploads }, { status: 502 });
