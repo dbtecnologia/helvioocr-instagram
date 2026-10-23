@@ -110,9 +110,11 @@ function cleanOcrName(value: string) {
 
 function isUsefulProductName(value: string) {
   const letters = (value.match(/[A-Za-zÀ-ÿ]/g) ?? []).length;
-  const words = value.split(/\s+/).filter((word) => /[A-Za-zÀ-ÿ]{2,}/.test(word));
-  const noisy = /^(r\$|kg|g|ml|l|un|ofertas?|válidas?|superpoupe|cortes? especiais?)$/i;
-  return letters >= 4 && words.length >= 2 && !words.every((word) => noisy.test(word));
+  const words = value.split(/\s+/).map((word) => word.replace(/[^A-Za-zÀ-ÿ]/g, "")).filter((word) => word.length >= 2);
+  const noisy = /^(r\$|kg|g|ml|l|un|und|cx|pct|ofertas?|válidas?|superpoupe|cortes?|especiais?|cada|clube|leve|pague|apenas|por|unidade|sai|promoção|econômico|econômica)$/i;
+  const meaningfulWords = words.filter((word) => !noisy.test(word));
+  const hasPresentation = /\b(?:kg|g|ml|l|un|und|cx|pct)\b/i.test(value);
+  return letters >= 4 && (meaningfulWords.length >= 2 || (meaningfulWords.length >= 1 && hasPresentation)) && meaningfulWords.length > 0;
 }
 
 function dedupeProducts(products: ExtractedProduct[]) {
@@ -173,7 +175,7 @@ export function extractOcrCandidatesFromLayout(items: OcrLayoutItem[]): Extracte
   const rawProducts = withBounds.filter((item) => {
     const normalized = item.text.replace(/\uFFFD/g, " ").replace(/\s+/g, " ").trim();
     const words = normalized.split(/\s+/).filter((word) => /[A-Za-zÀ-ÿ]{2,}/.test(word));
-    return !normalized.match(/\d{1,3}[,.]\d{2}/) && words.length >= 2 && !ignored.test(normalized);
+    return !isPriceLikeOcrLine(normalized) && !normalized.match(/\d{1,3}[,.]\d{2}/) && words.length >= 1 && !ignored.test(normalized) && isUsefulProductName(normalized);
   });
   const qualifier = rawProducts.find((item) => /sem\s+osso/i.test(item.text));
   const products = rawProducts.filter((item) => !/sem\s+osso/i.test(item.text)).map((item) => {
