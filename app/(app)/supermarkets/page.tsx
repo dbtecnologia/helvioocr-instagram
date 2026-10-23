@@ -3,6 +3,7 @@
 import { FormEvent, useEffect, useState } from "react";
 import { Camera, Edit3, ExternalLink, FileSpreadsheet, FileText, Images, LoaderCircle, Plus, RefreshCw, Search, ScanLine, Store, Trash2, X } from "lucide-react";
 import type { Publication, Supermarket } from "@/lib/types";
+import { runBrowserOcr } from "@/lib/browser-ocr";
 
 const emptyForm = { name: "", instagram_handle: "", instagram_url: "", city: "", neighborhood: "", address: "", network: "", active: true, monitoring_frequency: "weekly", notes: "" };
 const maxOcrImages = 3;
@@ -41,6 +42,8 @@ export default function SupermarketsPage() {
   const [feedMessage, setFeedMessage] = useState("");
   const [feedLimit, setFeedLimit] = useState("30");
   const [extracting, setExtracting] = useState(false);
+  const [ocrProgress, setOcrProgress] = useState(0);
+  const [ocrProgressMessage, setOcrProgressMessage] = useState("");
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [deletingPublication, setDeletingPublication] = useState(false);
   const [reportPublicationId, setReportPublicationId] = useState<string | null>(null);
@@ -141,13 +144,27 @@ export default function SupermarketsPage() {
   async function extractSelectedPublication() {
     if (!selectedPublication || !selectedImages.length) return;
     if (selectedImages.length > maxOcrImages) { setFeedMessage(`Selecione no máximo ${maxOcrImages} fotos por análise.`); return; }
-    setExtracting(true); setFeedMessage("Baixando a foto selecionada e colocando na fila do OCR…");
+    setExtracting(true); setOcrProgress(3); setOcrProgressMessage("Baixando as fotos selecionadas…"); setFeedMessage("Preparando as fotos para o OCR gratuito no navegador…");
     try {
       const response = await fetch("/api/instagram/extract", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ publication_id: selectedPublication.id, external_id: selectedPublication.external_id, source_url: selectedPublication.source_url, supermarket_id: selectedPublication.supermarket_id, image_indexes: selectedImages.slice(0, maxOcrImages) }) });
       const result = await response.json();
-      if (response.ok) setReportPublicationId(result.publication_id ?? selectedPublication.id);
-      setFeedMessage(response.ok ? `Leitura concluída: ${result.results?.reduce((total: number, item: { offers?: number }) => total + (item.offers ?? 0), 0) ?? 0} produto(s) salvo(s) em Relatórios.` : result.error ?? "Não foi possível concluir o OCR.");
-    } catch { setFeedMessage("Não foi possível iniciar o OCR. Verifique o servidor e tente novamente."); }
+      if (!response.ok) { setFeedMessage(result.error ?? "Não foi possível preparar o OCR."); return; }
+      const uploads = (result.uploads ?? []) as string[];
+      let totalOffers = 0;
+      for (let index = 0; index < uploads.length; index += 1) {
+        const uploadId = uploads[index];
+        const base = Math.round((index / uploads.length) * 85);
+        const ocr = await runBrowserOcr(`/api/uploads/${encodeURIComponent(uploadId)}`, (progress, message) => { setOcrProgress(Math.min(90, base + Math.round(progress * 0.85))); setOcrProgressMessage(`Foto ${index + 1} de ${uploads.length}: ${message}`); });
+        if (!ocr.text) continue;
+        const saveResponse = await fetch("/api/process/client", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ upload_id: uploadId, text: ocr.text, items: ocr.items }) });
+        const saved = await saveResponse.json() as { offers?: number; error?: string };
+        if (!saveResponse.ok) throw new Error(saved.error ?? "Não foi possível salvar os preços lidos.");
+        totalOffers += saved.offers ?? 0;
+        setOcrProgress(Math.min(96, Math.round(((index + 1) / uploads.length) * 96))); setOcrProgressMessage(`Foto ${index + 1} concluída. ${saved.offers ?? 0} produto(s) encontrado(s).`);
+      }
+      setOcrProgress(100); setOcrProgressMessage("Leitura concluída. Relatório pronto para compartilhar."); setReportPublicationId(result.publication_id ?? selectedPublication.id);
+      setFeedMessage(`Leitura concluída: ${totalOffers} produto(s) salvo(s) em Relatórios e Revisão.`);
+    } catch (error) { setFeedMessage(error instanceof Error ? error.message : "Não foi possível concluir o OCR."); }
     finally { setExtracting(false); }
   }
 
@@ -180,6 +197,7 @@ export default function SupermarketsPage() {
   const feedMarket = items.find((item) => item.id === feedMarketId);
 
   return <>
+    {extracting && <div className="notice" style={{ marginBottom: 16 }}><div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}><strong>{ocrProgressMessage || "Lendo encarte…"}</strong><strong>{ocrProgress}%</strong></div><div className="progress-track" role="progressbar" aria-valuenow={ocrProgress} aria-valuemin={0} aria-valuemax={100} style={{ marginTop: 8 }}><span className="progress-fill" style={{ width: `${ocrProgress}%` }} /></div></div>}
     <div className="page-heading"><div><div className="eyebrow">Operação</div><h1>Supermercados monitorados</h1><p className="subhead">Cadastre apenas o nome e o Instagram. Os demais dados podem ser preenchidos depois.</p></div><button className="button button-primary" onClick={openCreate}><Plus size={15} />Adicionar supermercado</button></div>
     {message && <div className="notice" style={{ marginBottom: 18 }}>{message}</div>}
     <section className="card"><div className="toolbar"><div className="toolbar-left"><div className="search"><Search size={15} /><input className="input" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Buscar por nome, @ ou cidade" /></div></div><div className="toolbar-right"><span className="field-note">{filtered.length} de {items.length} cadastrados</span></div></div>{filtered.length === 0 ? <div className="empty-state"><div><div className="empty-icon"><Store size={21} /></div><strong>{items.length === 0 ? "Nenhum supermercado cadastrado" : "Nenhum resultado encontrado"}</strong><p>{items.length === 0 ? "Comece adicionando um concorrente para abrir o feed e acompanhar preços." : "Tente buscar por outro nome, @ do Instagram ou cidade."}</p>{items.length === 0 && <button className="button button-soft" onClick={openCreate}><Plus size={14} />Adicionar primeiro concorrente</button>}</div></div> : <div className="table-wrap"><table><thead><tr><th>Supermercado</th><th>Localização</th><th>Instagram</th><th>Última coleta</th><th>Status</th><th>Ações</th></tr></thead><tbody>{filtered.map((item) => <tr key={item.id}><td><strong>{item.name}</strong><div className="field-note">{item.network || "Rede não informada"}</div></td><td>{item.city}<div className="field-note">{item.neighborhood}</div></td><td><a href={item.instagram_url || `https://instagram.com/${item.instagram_handle.replace("@", "")}`} target="_blank" rel="noreferrer" className="field-note">{item.instagram_handle} <ExternalLink size={11} style={{ verticalAlign: "-2px" }} /></a></td><td className="field-note">{formatCollectionDate(item.last_collection_at)}</td><td><span className={`status ${item.active ? "status-green" : "status-orange"}`}><span className="status-dot" />{item.active ? "Ativo" : "Inativo"}</span></td><td><div style={{ display: "flex", gap: 6, justifyContent: "flex-end", flexWrap: "wrap" }}><button className="button button-soft" style={{ padding: "7px 9px" }} onClick={() => void openFeed(item, true)}><Images size={13} />Feed</button><button className="button button-ghost" style={{ padding: "7px 9px" }} onClick={() => openEdit(item)}><Edit3 size={13} />Editar</button><button className="button button-ghost" style={{ padding: "7px 9px", color: "#bd5260" }} onClick={() => void deleteItem(item)} disabled={deletingId === item.id}><Trash2 size={13} />Excluir</button></div></td></tr>)}</tbody></table></div>}</section>
