@@ -22,4 +22,15 @@ describe("PaddleOCR layout extraction", () => {
       ["COXÃO MOLE BOVINO", 44.99],
     ]);
   });
+
+  it("associates a compact OCR price such as 699", () => {
+    const box = (left: number, top: number, right: number, bottom: number) => [[left, top], [right, top], [right, bottom], [left, bottom]];
+    const result = extractOcrCandidatesFromLayout([
+      { text: "SALSICHA HOT DOG", box: box(10, 20, 180, 45) },
+      { text: "699", box: box(20, 60, 100, 95) },
+      { text: "cada", box: box(105, 72, 145, 90) },
+    ]);
+    expect(result).toHaveLength(1);
+    expect(result[0]).toMatchObject({ nome: "SALSICHA HOT DOG", preco: 6.99 });
+  });
 });

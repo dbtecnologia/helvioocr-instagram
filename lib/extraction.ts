@@ -10,6 +10,34 @@ export function hashBuffer(buffer: Buffer) { return createHash("sha256").update(
 
 type OcrPrice = { raw: string; value: number; index: number };
 
+function parseCompactOcrPrice(rawValue: string, context = "") {
+  const normalized = rawValue.replace(/\s/g, "").replace(/^R?\$/i, "");
+  const decimal = normalized.match(/^(\d{1,3})(?:[,.])(\d{2})$/);
+  if (decimal) return { value: Number(`${decimal[1]}.${decimal[2]}`), confidence: 0.72 };
+  const compact = normalized.match(/^(\d{3,4})$/);
+  if (!compact) return null;
+  const digits = compact[1];
+  const hasPriceCue = /(?:R\$|cada|por\s+apenas|preço|unidade\s+sai|oferta)/i.test(context);
+  // A standalone 699 is a common OCR reading of 6,99. Four digits are
+  // accepted only when the surrounding text explicitly describes a price.
+  if (digits.length === 3 && !/^\d{3}(?:g|ml)$/i.test(rawValue)) {
+    return { value: Number(`${digits.slice(0, -2)}.${digits.slice(-2)}`), confidence: 0.52 };
+  }
+  if (digits.length === 4 && hasPriceCue && !/^\d{4}(?:g|ml)$/i.test(rawValue)) {
+    return { value: Number(`${digits.slice(0, -2)}.${digits.slice(-2)}`), confidence: 0.46 };
+  }
+  return null;
+}
+
+function isPriceLikeOcrLine(line: string, nearbyText = "") {
+  const cleaned = line.replace(/\s+/g, " ").trim();
+  if (!cleaned) return null;
+  const parsed = parseCompactOcrPrice(cleaned, nearbyText);
+  if (!parsed) return null;
+  if (/\b(?:19|20)\d{2}\b/.test(cleaned)) return null;
+  return { ...parsed, raw: cleaned };
+}
+
 function findOcrPrices(text: string): OcrPrice[] {
   const prices: OcrPrice[] = [];
   const seen = new Set<string>();
@@ -33,6 +61,32 @@ function findOcrPrices(text: string): OcrPrice[] {
   // Tesseract sometimes separates the cents with a space: R$ 39 99.
   for (const match of text.matchAll(/R\$\s*(\d{1,3})\s+(\d{2})(?!\d)/gi)) {
     add(match[0], match.index ?? 0, match[1], match[2]);
+  }
+  // Flyer prices are frequently read without the comma (699 -> 6,99) or
+  // split across adjacent OCR lines (20, + 00 -> 20,00). Keep these
+  // heuristics conservative and only accept standalone numeric lines.
+  const lines = text.split(/\r?\n/);
+  let offset = 0;
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index] ?? "";
+    const next = lines[index + 1]?.trim() ?? "";
+    const previous = lines.slice(Math.max(0, index - 2), index + 3).join(" ");
+    const splitInteger = line.trim().match(/^(?:R\$\s*)?(\d{1,3})[,.]$/);
+    const splitCents = next.match(/^\d{2}$/);
+    if (splitInteger && splitCents) {
+      add(`${line.trim()}${next}`, offset + line.indexOf(line.trim()), splitInteger[1], splitCents[0]);
+    } else {
+      const parsed = isPriceLikeOcrLine(line, previous);
+      if (parsed) {
+        const rawIndex = line.indexOf(line.trim());
+        const key = `${offset + rawIndex}:${parsed.value.toFixed(2)}`;
+        if (!seen.has(key)) {
+          seen.add(key);
+          prices.push({ raw: parsed.raw, value: parsed.value, index: offset + rawIndex });
+        }
+      }
+    }
+    offset += line.length + 1;
   }
   return prices.sort((a, b) => a.index - b.index);
 }
@@ -112,10 +166,8 @@ function layoutBounds(item: OcrLayoutItem) {
 export function extractOcrCandidatesFromLayout(items: OcrLayoutItem[]): ExtractedProduct[] {
   const withBounds = items.map((item) => ({ ...item, bounds: layoutBounds(item) })).filter((item): item is OcrLayoutItem & { bounds: NonNullable<ReturnType<typeof layoutBounds>> } => Boolean(item.bounds));
   const priceItems = withBounds.map((item) => {
-    const match = item.text.match(/(\d{1,3}(?:[.]\d{3})?)[,.](\d{2})/);
-    if (!match) return null;
-    const value = Number(`${match[1].replace(".", "")}.${match[2]}`);
-    return Number.isFinite(value) ? { item, value } : null;
+    const parsed = isPriceLikeOcrLine(item.text, withBounds.slice(Math.max(0, withBounds.indexOf(item) - 2), withBounds.indexOf(item) + 3).map((candidate) => candidate.text).join(" "));
+    return parsed ? { item, value: parsed.value } : null;
   }).filter((item): item is { item: typeof withBounds[number]; value: number } => Boolean(item));
   const ignored = /^(r?\$|kg|g|ml|l|un|und|ofertas?|válidas?|imagens?|supermercado|carne|superpoupe|cortes?\s*especiais?)$/i;
   const rawProducts = withBounds.filter((item) => {
@@ -137,7 +189,9 @@ export function extractOcrCandidatesFromLayout(items: OcrLayoutItem[]): Extracte
     })[0];
     if (!product) return null;
     const unit = withBounds.find((candidate) => /^(kg|g|ml|l|un|und)$/i.test(candidate.text.trim()) && Math.abs(candidate.bounds.centerX - item.bounds.centerX) < 100 && candidate.bounds.top >= item.bounds.top)?.text.toLowerCase() ?? null;
-    return { nome: cleanOcrName(product.text), marca: null, quantidade: null, unidade: unit, preco: value, preco_anterior: null, condicoes: null, confianca: 0.9 };
+    const name = cleanOcrName(product.text);
+    const presentation = name.match(/(\d+(?:[.,]\d+)?)\s*(kg|g|l|ml|un|und|cx|pct|pacote|fardo)\b/i);
+    return { nome: name, marca: null, quantidade: presentation ? Number(presentation[1].replace(",", ".")) : null, unidade: presentation?.[2]?.toLowerCase() ?? unit, preco: value, preco_anterior: null, condicoes: null, confianca: 0.78 };
   }).filter(Boolean) as ExtractedProduct[];
   return dedupeProducts(result);
 }
