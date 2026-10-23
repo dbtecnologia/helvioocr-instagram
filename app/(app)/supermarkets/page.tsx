@@ -86,7 +86,21 @@ export default function SupermarketsPage() {
       const response = await fetch("/api/instagram/collect", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ handle: item.instagram_handle, supermarket_id: item.id, limit: Number(feedLimit) }) });
       const result = await response.json();
       if (!response.ok) { setFeedMessage(result.error ?? "Não foi possível atualizar o feed."); return; }
-      setPublications(result.publications ?? []);
+      const refreshedPublications = (result.publications ?? []) as Publication[];
+      const currentSelectedPublication = selectedPublication;
+      const refreshedSelectedPublication = currentSelectedPublication
+        ? refreshedPublications.find((publication) => publication.id === currentSelectedPublication.id
+          || publication.external_id === currentSelectedPublication.external_id
+          || publication.source_url === currentSelectedPublication.source_url) ?? null
+        : null;
+      setPublications(refreshedPublications);
+      if (currentSelectedPublication) {
+        setSelectedPublication(refreshedSelectedPublication);
+        setSelectedImages(refreshedSelectedPublication
+          ? refreshedSelectedPublication.media_urls.map((_, index) => index).slice(0, maxOcrImages)
+          : []);
+        if (!refreshedSelectedPublication) setReportPublicationId(null);
+      }
       setItems((current) => current.map((currentItem) => currentItem.id === item.id ? { ...currentItem, instagram_handle: `@${result.handle}`, instagram_url: `https://instagram.com/${result.handle}`, last_collection_at: new Date().toISOString() } : currentItem));
       setFeedMessage(result.warning ?? `${result.count} publicação(ões) encontrada(s). Selecione uma foto para o OCR.`);
     } catch { setFeedMessage("Não foi possível carregar o feed. Verifique o servidor e tente novamente."); }
