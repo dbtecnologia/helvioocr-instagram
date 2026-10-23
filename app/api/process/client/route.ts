@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { randomUUID } from "node:crypto";
 import { extractOcrCandidates, extractOcrCandidatesFromLayout } from "@/lib/extraction";
 import { getUpload, replaceOffersForUpload, updateUpload } from "@/lib/store";
 import type { Offer } from "@/lib/types";
@@ -32,7 +33,7 @@ export async function POST(request: Request) {
     const fallback = products.length ? products : extractOcrCandidates(text);
     const readAt = new Date().toISOString();
     const offers: Offer[] = fallback.map((product, index) => ({
-      id: `${uploadId}-${index}`,
+      id: randomUUID(),
       upload_id: uploadId,
       publication_id: upload.publication_id ?? null,
       supermarket_id: String(upload.supermarket_id ?? ""),

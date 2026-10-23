@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { getUpload, updateUpload, replaceOffersForUpload } from "@/lib/store";
@@ -68,7 +69,7 @@ export async function processUpload(uploadId: string) {
     await updateProgress(90, "Organizando os produtos encontrados…");
     const readAt = new Date().toISOString();
     const offers: Offer[] = extraction.products.map((product, index) => ({
-      id: `${uploadId}-${index}`,
+      id: randomUUID(),
       upload_id: uploadId,
       publication_id: upload.publication_id ?? null,
       supermarket_id: String(upload.supermarket_id ?? ""),
