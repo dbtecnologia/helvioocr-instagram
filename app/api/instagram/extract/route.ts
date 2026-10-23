@@ -25,20 +25,38 @@ export async function POST(request: Request) {
   const urls = indexes.map((index) => publication.media_urls[index]).filter((url): url is string => Boolean(url) && isAllowedMediaUrl(url)).slice(0, 8);
   if (!urls.length) return NextResponse.json({ error: "A publicação não possui imagens públicas disponíveis para extração." }, { status: 400 });
 
-  const uploads: string[] = [];
-  for (const [index, imageUrl] of urls.entries()) {
-    const response = await fetch(imageUrl, { signal: AbortSignal.timeout(30000), cache: "no-store" });
-    if (!response.ok) continue;
-    const contentType = response.headers.get("content-type")?.split(";")[0] ?? "image/jpeg";
-    if (!contentType.startsWith("image/")) continue;
-    const buffer = Buffer.from(await response.arrayBuffer());
-    if (!buffer.length || buffer.length > 25 * 1024 * 1024) continue;
-    const id = randomUUID();
-    const extension = contentType === "image/png" ? "png" : contentType === "image/webp" ? "webp" : "jpg";
-    await createUploadFromBuffer({ id, original_name: `instagram-${publication.id}-${index}.${extension}`, mime_type: contentType, size: buffer.length, content_hash: hashBuffer(buffer), storage_path: `instagram/${id}.${extension}`, supermarket_id: publication.supermarket_id, publication_id: publication.id, source_url: publication.source_url, buffer });
-    uploads.push(id);
-  }
+  const downloadedImages = (await Promise.all(urls.map(async (imageUrl, index) => {
+    try {
+      const response = await fetch(imageUrl, { signal: AbortSignal.timeout(30000), cache: "no-store" });
+      if (!response.ok) return null;
+      const contentType = response.headers.get("content-type")?.split(";")[0] ?? "image/jpeg";
+      if (!contentType.startsWith("image/")) return null;
+      const buffer = Buffer.from(await response.arrayBuffer());
+      if (!buffer.length || buffer.length > 25 * 1024 * 1024) return null;
+      return { index, contentType, buffer };
+    } catch (error) {
+      console.warn("[instagram] image download failed", { publicationId: publication.id, index, error: error instanceof Error ? error.message : String(error) });
+      return null;
+    }
+  }))).filter((item) => item !== null);
+
+  const seenHashes = new Set<string>();
+  const uploads = (await Promise.all(downloadedImages.map(async ({ index, contentType, buffer }) => {
+    const contentHash = hashBuffer(buffer);
+    if (seenHashes.has(contentHash)) return null;
+    seenHashes.add(contentHash);
+    try {
+      const id = randomUUID();
+      const extension = contentType === "image/png" ? "png" : contentType === "image/webp" ? "webp" : "jpg";
+      await createUploadFromBuffer({ id, original_name: `instagram-${publication.id}-${index}.${extension}`, mime_type: contentType, size: buffer.length, content_hash: contentHash, storage_path: `instagram/${id}.${extension}`, supermarket_id: publication.supermarket_id, publication_id: publication.id, source_url: publication.source_url, buffer });
+      return id;
+    } catch (error) {
+      console.warn("[instagram] image upload failed", { publicationId: publication.id, index, error: error instanceof Error ? error.message : String(error) });
+      return null;
+    }
+  }))).filter((id) => id !== null);
   if (!uploads.length) return NextResponse.json({ error: "Não foi possível baixar as imagens desta publicação." }, { status: 502 });
   await Promise.all(uploads.map((uploadId) => fetch(new URL("/api/process", request.url), { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ upload_id: uploadId }) })));
   return NextResponse.json({ status: "queued", publication_id: publication.id, uploads }, { status: 202 });
 }
+
