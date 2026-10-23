@@ -8,6 +8,7 @@ export const runtime = "nodejs";
 export const maxDuration = 120;
 
 const allowedHosts = ["cdninstagram.com", "instagram.com", "fbcdn.net", "fbsbx.com", "facebook.com"];
+const maxImagesPerSelection = 3;
 
 function isAllowedMediaUrl(value: string) {
   try {
@@ -21,7 +22,9 @@ export async function POST(request: Request) {
   if (!body.publication_id) return NextResponse.json({ error: "publication_id é obrigatório." }, { status: 400 });
   const publication = await getPublication(body.publication_id);
   if (!publication) return NextResponse.json({ error: "Publicação não encontrada." }, { status: 404 });
-  const indexes = body.image_indexes?.length ? body.image_indexes : publication.media_urls.map((_, index) => index);
+  const requestedIndexes = body.image_indexes?.length ? body.image_indexes : publication.media_urls.map((_, index) => index);
+  if (requestedIndexes.length > maxImagesPerSelection) return NextResponse.json({ error: `Selecione no máximo ${maxImagesPerSelection} fotos por análise.` }, { status: 400 });
+  const indexes = requestedIndexes.slice(0, maxImagesPerSelection);
   const urls = indexes.map((index) => publication.media_urls[index]).filter((url): url is string => Boolean(url) && isAllowedMediaUrl(url)).slice(0, 8);
   if (!urls.length) return NextResponse.json({ error: "A publicação não possui imagens públicas disponíveis para extração." }, { status: 400 });
 

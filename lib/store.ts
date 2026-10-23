@@ -182,6 +182,29 @@ export async function getPublication(id: string) {
   return ((await readLocal()).publications ?? []).find((item) => item.id === id) ?? null;
 }
 
+export async function deletePublication(id: string) {
+  const current = await getPublication(id);
+  if (!current) throw new Error("Publicação não encontrada.");
+  const supabase = await getDataSupabase();
+  if (supabase) {
+    const { data: images, error: imagesError } = await supabase.from("flyer_images").select("storage_path, metadata").eq("publication_id", id);
+    if (imagesError) throw new Error(imagesError.message);
+    const storagePaths = (images ?? []).flatMap((image) => [image.storage_path, image.metadata?.processed_path]).filter((value): value is string => Boolean(value));
+    if (storagePaths.length) {
+      const { error: storageError } = await supabase.storage.from(envStorageBucket()).remove(storagePaths);
+      if (storageError) throw new Error(storageError.message);
+    }
+    const { error } = await supabase.from("publications").delete().eq("id", id);
+    if (error) throw new Error(error.message);
+    return;
+  }
+  const store = await readLocal();
+  store.publications = (store.publications ?? []).filter((item) => item.id !== id);
+  store.uploads = store.uploads.filter((upload) => upload.publication_id !== id);
+  store.offers = store.offers.filter((offer) => offer.publication_id !== id);
+  await writeLocal(store);
+}
+
 export async function upsertPublications(items: Publication[]) {
   if (!items.length) return [];
   const supabase = await getDataSupabase();
@@ -218,3 +241,4 @@ export async function createUploadFromBuffer(input: { id: string; original_name:
 }
 
 function envStorageBucket() { return process.env.SUPABASE_STORAGE_BUCKET ?? "flyer-images"; }
+
