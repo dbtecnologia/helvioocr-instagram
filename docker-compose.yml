@@ -1,4 +1,15 @@
 services:
+  paddle-ocr:
+    build:
+      context: ./ocr-service
+    ports:
+      - "8001:8001"
+    environment:
+      PADDLEOCR_LANG: pt
+      PADDLEOCR_API_TOKEN: ${PADDLEOCR_TOKEN:-}
+    volumes:
+      - paddle_models:/root/.paddlex
+      - paddle_models_legacy:/root/.paddleocr
   redis:
     image: redis:7-alpine
     ports:
@@ -17,5 +28,7 @@ services:
     volumes:
       - pricescan_n8n:/home/node/.n8n
 volumes:
+  paddle_models:
+  paddle_models_legacy:
   pricescan_redis:
   pricescan_n8n:

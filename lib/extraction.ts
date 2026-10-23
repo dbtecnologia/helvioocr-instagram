@@ -1,8 +1,7 @@
 import { createHash } from "node:crypto";
 import sharp from "sharp";
-import OpenAI from "openai";
 import { env } from "./env";
-import { extractionOfferSchema, extractionSchema } from "./validation";
+import { extractionOfferSchema } from "./validation";
 import type Tesseract from "tesseract.js";
 
 export type ExtractedProduct = import("zod").infer<typeof extractionOfferSchema>;
@@ -206,20 +205,3 @@ export async function runOcrVariants(input: Buffer) {
     return texts;
   });
 }
-
-export async function extractWithVision(image: Buffer, ocrText: string) {
-  if (!env.openAiKey) return { status: "needs_review" as const, reason: "OPENAI_API_KEY não configurada.", products: [] };
-  const client = new OpenAI({ apiKey: env.openAiKey });
-  const response = await client.responses.create({
-    model: env.openAiModel,
-    input: [{ role: "user", content: [
-      { type: "input_text", text: `Você é um extrator de ofertas de encartes. Nunca invente dados. Use null quando estiver ausente. Retorne somente JSON com data_publicacao e produtos. Cada produto precisa de nome, marca, quantidade, unidade, preco, preco_anterior, condicoes e confianca (0 a 1). Texto OCR disponível:\n${ocrText}` },
-      { type: "input_image", image_url: `data:image/png;base64,${image.toString("base64")}`, detail: "high" },
-    ] }],
-    text: { format: { type: "json_object" } },
-  });
-  const parsed = extractionSchema.safeParse(JSON.parse(response.output_text));
-  if (!parsed.success) return { status: "needs_review" as const, reason: "Resposta da IA fora do schema.", products: [] };
-  return { status: "completed" as const, products: parsed.data.produtos, date: parsed.data.data_publicacao ?? null };
-}
-

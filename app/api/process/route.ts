@@ -2,8 +2,7 @@ import { NextResponse } from "next/server";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { getUpload, updateUpload, replaceOffersForUpload } from "@/lib/store";
-import { extractOcrCandidates, extractOcrCandidatesFromLayout, extractWithVision, findPricesInText, preprocessImage, runOcrVariants } from "@/lib/extraction";
-import { parseImageWithOcrSpace } from "@/lib/ocr-space";
+import { extractOcrCandidates, extractOcrCandidatesFromLayout, findPricesInText, preprocessImage, runOcrVariants } from "@/lib/extraction";
 import { runPaddleOcr } from "@/lib/paddle-ocr";
 import { env } from "@/lib/env";
 import { getDataSupabase } from "@/lib/supabase-server";
@@ -37,22 +36,12 @@ export async function processUpload(uploadId: string) {
     await updateProgress(30, "Imagem preparada. Iniciando OCR…");
     let ocrText = "";
     let fallbackProducts: ReturnType<typeof extractOcrCandidates> = [];
-    if (env.ocrSpaceKey) {
-      try {
-        await updateProgress(42, "Consultando OCR.space…");
-        const remote = await parseImageWithOcrSpace(original, String(upload.original_name), upload.mime_type);
-        ocrText = remote.text;
-        fallbackProducts = remote.products;
-      } catch (error) {
-        console.warn("[ocr] OCR.space falhou; tentando fallback local", error instanceof Error ? error.message : error);
-      }
-    }
-    if (!ocrText && env.paddleOcrEnabled) {
-      await updateProgress(55, "Lendo textos e preços com OCR local…");
-      const paddle = await runPaddleOcr(original, String(upload.original_name));
+    if (!ocrText && (env.paddleOcrEnabled || env.paddleOcrUrl)) {
+      await updateProgress(55, "Lendo textos e preços com PaddleOCR gratuito…");
+      const paddle = await runPaddleOcr(original, String(upload.original_name), upload.mime_type);
       if (paddle?.text) {
         ocrText = paddle.text;
-        fallbackProducts = paddle.items?.length ? extractOcrCandidatesFromLayout(paddle.items) : extractOcrCandidates(paddle.text);
+        fallbackProducts = paddle.products?.length ? paddle.products.map((product) => ({ nome: product.nome, marca: product.marca ?? null, quantidade: product.quantidade ?? null, unidade: product.unidade ?? null, preco: product.preco, preco_anterior: product.preco_anterior ?? null, condicoes: product.condicoes ?? null, confianca: product.confianca })) : paddle.items?.length ? extractOcrCandidatesFromLayout(paddle.items) : extractOcrCandidates(paddle.text);
       }
     }
     if (!ocrText && env.ocrLocalFallback) {
@@ -64,13 +53,7 @@ export async function processUpload(uploadId: string) {
     if (!ocrText) throw new Error("Nenhum provedor de OCR está configurado ou disponível.");
     await updateProgress(78, "Relacionando produtos e preços…");
     const detectedPrices = findPricesInText(ocrText);
-    let extraction: { status: "completed" | "needs_review"; products: typeof fallbackProducts; date?: string | null };
-    if (env.openAiKey) {
-      try { extraction = await extractWithVision(prepared, ocrText); }
-      catch { extraction = { status: "needs_review", products: fallbackProducts, date: null }; }
-    } else {
-      extraction = { status: "needs_review", products: fallbackProducts, date: null };
-    }
+    const extraction: { status: "completed" | "needs_review"; products: typeof fallbackProducts; date?: string | null } = { status: "needs_review", products: fallbackProducts, date: null };
 
     await updateProgress(90, "Organizando os produtos encontrados…");
     const readAt = new Date().toISOString();
