@@ -207,7 +207,9 @@ input[type="checkbox"] { accent-color: var(--signal); }
 [style*="border:1px solid #e5edf2"],
 [style*="borderBottom: 1px solid #e6edf3"],
 [style*="border-bottom: 1px solid #e6edf3"],
-[style*="2b8fba"] { border-color: #3bbf70 !important; }
+[style*="2b8fba"],
+[style*="43, 143, 186"],
+[style*="43, 82, 105"] { border-color: #3bbf70 !important; }
 [style*="color: #536a7d"],
 [style*="color:#536a7d"] { color: #b5c8d5 !important; }
 
